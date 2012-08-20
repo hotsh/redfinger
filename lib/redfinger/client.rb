@@ -36,6 +36,7 @@ module Redfinger
 
     def retrieve_template_from_xrd(ssl = true)
       xrd_client =  RestClient::Resource.new(xrd_url(ssl),
+                      :verify_ssl => true,
                       :timeout => self.xrd_timeout,
                       :open_timeout => self.xrd_open_timeout
                     )
