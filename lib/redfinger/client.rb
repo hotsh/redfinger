@@ -35,27 +35,34 @@ module Redfinger
     end
 
     def retrieve_template_from_xrd(ssl = true)
-      xrd_client =  RestClient::Resource.new(xrd_url(ssl),
-                      :verify_ssl => true,
-                      :timeout => self.xrd_timeout,
-                      :open_timeout => self.xrd_open_timeout
-                    )
+      begin
+        xrd_client =  RestClient::Resource.new(
+                        xrd_url(ssl),
+                        :timeout => self.xrd_timeout,
+                        :open_timeout => self.xrd_open_timeout,
+                        :verify_ssl => (ssl ? OpenSSL::SSL::VERIFY_PEER : false))
 
-      doc = Nokogiri::XML::Document.parse(xrd_client.get.body)
-      if doc.namespaces["xmlns"] != "http://docs.oasis-open.org/ns/xri/xrd-1.0"
-        # it's probably not finger, let's try without ssl
-        # http://code.google.com/p/webfinger/wiki/WebFingerProtocol
-        # says first ssl should be tried then without ssl, should fix issue #2
-        doc = Nokogiri::XML::Document.parse(RestClient.get(xrd_url(false)).body)
-      end
-
-      doc.at('Link[rel=lrdd]').attribute('template').value
-    rescue  Errno::ECONNREFUSED, Errno::ETIMEDOUT,
-            RestClient::RequestTimeout, RestClient::ResourceNotFound, RestClient::Forbidden
-      if ssl
-        retrieve_template_from_xrd(false)
-      else
-        raise Redfinger::ResourceNotFound, "Unable to find the host XRD file."
+        doc = Nokogiri::XML::Document.parse(xrd_client.get.body)
+        if doc.namespaces["xmlns"] != "http://docs.oasis-open.org/ns/xri/xrd-1.0"
+          # it's probably not finger, let's try without ssl
+          # http://code.google.com/p/webfinger/wiki/WebFingerProtocol
+          # says first ssl should be tried then without ssl
+          if ssl
+            retrieve_template_from_xrd(false)
+          else
+            raise Redfinger::ResourceNotFound, "Unable to find the host XRD file."
+          end
+        else
+          doc.at('Link[rel=lrdd]').attribute('template').value
+        end
+      rescue Errno::ECONNREFUSED, Errno::ETIMEDOUT,
+             RestClient::RequestTimeout, RestClient::ResourceNotFound, RestClient::Forbidden,
+             OpenSSL::SSL::SSLError
+        if ssl
+          retrieve_template_from_xrd(false)
+        else
+          raise Redfinger::ResourceNotFound, "Unable to find the host XRD file."
+        end
       end
     end
 
